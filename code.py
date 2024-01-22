@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, Header
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.encoders import jsonable_encoder
 from typing import Optional
@@ -12,8 +12,6 @@ import aiohttp
 
 
 app = FastAPI()
-
-speech_key, service_region = "ad5c38b8edf14fc382ac17533393df30", "eastus"
 
 class BinaryFileReaderCallback(speechsdk.audio.PullAudioInputStreamCallback):
     def __init__(self, filename: str):
@@ -32,6 +30,8 @@ class BinaryFileReaderCallback(speechsdk.audio.PullAudioInputStreamCallback):
 
 @app.post("/")
 async def pronunciation_check(
+    speech_key: str = Header(...),
+    service_region: str = Header(...),
     url: str = Form(...),
     reference_text: Optional[str] = Form(default=""),
     grading_system: Optional[str] = Form(default="HundredMark"),
@@ -51,11 +51,6 @@ async def pronunciation_check(
                     if not chunk:
                         break
                     fd.write(chunk)
-            #while True:
-            #    chunk = await file.read(1024)
-            #    if not chunk:
-            #        break
-            #    fd.write(chunk)
 
 
     config_json = {
@@ -68,7 +63,7 @@ async def pronunciation_check(
         "NBestPhonemeCount": 0,  # > 0 to enable "spoken phoneme" mode, 0 to disable
     }
 
-    checker = PunctuationCheck(target_filename, reference_text, config_json)
+    checker = PunctuationCheck(target_filename, reference_text, config_json, speech_key, service_region)
 
     t = threading.Thread(target=checker.speech_recognize_continuous_from_file)
     t.start()
@@ -82,11 +77,13 @@ async def stream_output(thread, checker):
 
 
 class PunctuationCheck:
-    def __init__(self, filename, reference_text, config_json):
+    def __init__(self, filename, reference_text, config_json, speech_key, service_region):
         self.filename = filename
         self.reference_text = reference_text
         self.config_json = config_json
         self.output_obj = {}
+        self.speech_key = speech_key
+        self.service_region = service_region
 
     def on_recognized(self, evt):
         #pronunciation_result = speechsdk.PronunciationAssessmentResult(evt.result)
@@ -101,7 +98,7 @@ class PunctuationCheck:
         callback = BinaryFileReaderCallback(self.filename)
         stream = speechsdk.audio.PullAudioInputStream(stream_format=compressed_format, pull_stream_callback=callback)
 
-        speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=service_region)
+        speech_config = speechsdk.SpeechConfig(subscription=self.speech_key, region=self.service_region)
         #audio_config = speechsdk.audio.AudioConfig(filename=self.filename)
         audio_config = speechsdk.audio.AudioConfig(stream=stream)
 
