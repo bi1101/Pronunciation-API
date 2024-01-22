@@ -5,7 +5,7 @@ WORKDIR /src
 COPY ./ .
 
 RUN wget -O - https://www.openssl.org/source/openssl-1.1.1w.tar.gz | tar zxf - 
-RUN cd openssl-1.1.1u && \
+RUN cd openssl-1.1.1w && \
         ./config --prefix=/usr/local && \
         make -j $(nproc) && \
         make install_sw install_ssldirs && \
