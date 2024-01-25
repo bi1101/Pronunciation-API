@@ -26,4 +26,4 @@ ENV LD_LIBRARY_PATH="$SPEECHSDK_ROOT/lib/x64:$LD_LIBRARY_PATH"
 
 RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
-CMD ["uvicorn", "code:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "Pronunciation_api:app", "--host", "0.0.0.0", "--port", "8080"]
