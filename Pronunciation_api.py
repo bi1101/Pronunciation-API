@@ -72,7 +72,9 @@ async def pronunciation_check(
 
 async def stream_output(thread, checker):
     while thread.is_alive():
-        yield b'data: ' + json.dumps(checker.get_output_obj()).encode() + b'\n\n'
+        if checker.new_data_available:
+            yield b'data: ' + json.dumps(checker.get_output_obj()).encode() + b'\n\n'
+            checker.new_data_available = False  # Reset flag after streaming
         await asyncio.sleep(0.9)
 
 
@@ -84,10 +86,13 @@ class PunctuationCheck:
         self.output_obj = {}
         self.speech_key = speech_key
         self.service_region = service_region
+        self.new_data_available = False  # Flag to indicate new data availability
+
 
     def on_recognized(self, evt):
         #pronunciation_result = speechsdk.PronunciationAssessmentResult(evt.result)
         self.output_obj = json.loads(evt.result.json)
+        self.new_data_available = True  # Set flag to true as new data is available
 
     def speech_recognize_continuous_from_file(self):
 
