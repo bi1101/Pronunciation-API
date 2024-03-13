@@ -39,6 +39,7 @@ async def pronunciation_check(
     dimension: Optional[str] = Form(default="Comprehensive"),
     enable_miscue: Optional[bool] = Form(default=False),
     enable_prosody: Optional[bool] = Form(default=True),
+    phoneme_alphabet: Optional[str] = Form(default="IPA"),
 ):
     target_filename = url.split("/")[-1]
     async with aiohttp.ClientSession() as session:
@@ -61,9 +62,10 @@ async def pronunciation_check(
         "EnableMiscue": enable_miscue,
         "EnableProsodyAssessment": enable_prosody,
         "NBestPhonemeCount": 0,  # > 0 to enable "spoken phoneme" mode, 0 to disable
+        "PhonemeAlphabet": "IPA",
     }
 
-    checker = PunctuationCheck(target_filename, reference_text, config_json, speech_key, service_region)
+    checker = PronunciationCheck(target_filename, reference_text, config_json, speech_key, service_region)
 
     t = threading.Thread(target=checker.speech_recognize_continuous_from_file)
     t.start()
@@ -78,7 +80,7 @@ async def stream_output(thread, checker):
         await asyncio.sleep(0.9)
 
 
-class PunctuationCheck:
+class PronunciationCheck:
     def __init__(self, filename, reference_text, config_json, speech_key, service_region):
         self.filename = filename
         self.reference_text = reference_text
