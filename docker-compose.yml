@@ -1,5 +1,6 @@
 version: "3"
 services:
     pronunciation-api:
+        container_name: pronunciation_api
         image: bi1101/pronunciation-api:latest
         ports: ["8080:8080"]
