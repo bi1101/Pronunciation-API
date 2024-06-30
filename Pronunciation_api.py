@@ -1,6 +1,7 @@
 from fastapi import FastAPI, File, UploadFile, Form, Header
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.encoders import jsonable_encoder
+from fastapi import HTTPException
 from typing import Optional
 import azure.cognitiveservices.speech as speechsdk
 import uvicorn
@@ -28,6 +29,7 @@ class BinaryFileReaderCallback(speechsdk.audio.PullAudioInputStreamCallback):
         self._file_h.close()
 
 
+
 @app.post("/")
 async def pronunciation_check(
     speech_key: str = Header(...),
@@ -46,8 +48,9 @@ async def pronunciation_check(
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers) as response:
             if response.status != 200:
-                error_message = await response.text()  # Get the error message from the response
-                return {"status": response.status, "message": error_message}  # Return both status and message
+                error_message = await response.text()
+                # Raise an HTTPException with the status code and error message
+                raise HTTPException(status_code=response.status, detail=error_message)
             with open(target_filename, 'wb') as fd:
                 while True:
                     chunk = await response.content.readany()
