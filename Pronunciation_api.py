@@ -94,37 +94,53 @@ class PronunciationCheck:
         self.speech_key = speech_key
         self.service_region = service_region
         self.new_data_available = False  # Flag to indicate new data availability
-        self.done = asyncio.Event()
 
-    async def on_recognized(self, evt):
-        # Assume evt.result.json is a method to get the JSON result
-        self.output_obj = json.loads(evt.result.json())
+
+    def on_recognized(self, evt):
+        #pronunciation_result = speechsdk.PronunciationAssessmentResult(evt.result)
+        self.output_obj = json.loads(evt.result.json)
         self.new_data_available = True  # Set flag to true as new data is available
 
-    async def speech_recognize_continuous_from_file(self):
+    def speech_recognize_continuous_from_file(self):
+
+        # Create a compressed format for MP3
         compressed_format = speechsdk.audio.AudioStreamFormat(compressed_stream_format=speechsdk.AudioStreamContainerFormat.ANY)
+        
+        # Create the callback and stream
         callback = BinaryFileReaderCallback(self.filename)
         stream = speechsdk.audio.PullAudioInputStream(stream_format=compressed_format, pull_stream_callback=callback)
 
         speech_config = speechsdk.SpeechConfig(subscription=self.speech_key, region=self.service_region)
+        #audio_config = speechsdk.audio.AudioConfig(filename=self.filename)
         audio_config = speechsdk.audio.AudioConfig(stream=stream)
 
         speech_recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config, language="en-US")
 
         pronunciation_config = speechsdk.PronunciationAssessmentConfig(json_string=json.dumps(self.config_json))
         pronunciation_config.reference_text = self.reference_text
+
         pronunciation_config.apply_to(speech_recognizer)
 
-        speech_recognizer.recognized.connect(self.on_recognized)
-        speech_recognizer.session_stopped.connect(self.stop_cb)
-        speech_recognizer.canceled.connect(self.stop_cb)
+        done = False
 
+        def stop_cb(evt: speechsdk.SessionEventArgs):
+            nonlocal done
+            done = True
+
+        speech_recognizer.recognized.connect(self.on_recognized)
+        speech_recognizer.session_stopped.connect(stop_cb)
+        speech_recognizer.canceled.connect(stop_cb)
+
+        # Start continuous speech recognition
         speech_recognizer.start_continuous_recognition()
-        await self.done.wait()
+        while not done:
+            time.sleep(.5)
+
         speech_recognizer.stop_continuous_recognition()
 
-    def stop_cb(self, evt: speechsdk.SessionEventArgs):
-        self.done.set()
+    def get_output_obj(self):
+        return self.output_obj
+
 
 if __name__ == "__main__":
     uvicorn.run("Pronunciation_api:app", host="0.0.0.0", port=8080)
