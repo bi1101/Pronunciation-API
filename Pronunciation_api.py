@@ -41,9 +41,10 @@ async def pronunciation_check(
     enable_prosody: Optional[bool] = Form(default=True),
     phoneme_alphabet: Optional[str] = Form(default="IPA"),
 ):
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
     target_filename = url.split("/")[-1]
     async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
+        async with session.get(url, headers=headers) as response:
             if response.status != 200:
                 error_message = await response.text()  # Get the error message from the response
                 return {"status": response.status, "message": error_message}  # Return both status and message
