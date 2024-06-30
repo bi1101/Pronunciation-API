@@ -7,7 +7,7 @@ import azure.cognitiveservices.speech as speechsdk
 import uvicorn
 import time
 import asyncio
-import threading
+from multiprocessing import Process
 import json
 import aiohttp
 
@@ -45,6 +45,10 @@ async def pronunciation_check(
 ):
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
     target_filename = url.split("/")[-1]
+    import uuid
+
+    # Append a random UUID to the target filename to avoid duplicates
+    target_filename = f"{uuid.uuid4()}_{target_filename}"
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers) as response:
             if response.status != 200:
@@ -70,36 +74,41 @@ async def pronunciation_check(
         "PhonemeAlphabet": phoneme_alphabet,
     }
 
-    checker = PronunciationCheck(target_filename, reference_text, config_json, speech_key, service_region)
+    queue = Queue()
+    checker = PronunciationCheck(target_filename, reference_text, config_json, speech_key, service_region, queue=queue)
 
-    t = threading.Thread(target=checker.speech_recognize_continuous_from_file)
-    t.start()
-    return StreamingResponse(stream_output(t, checker), media_type="text/event-stream")
+    p = Process(target=checker.speech_recognize_continuous_from_file)
+    p.start()
+    return StreamingResponse(stream_output(queue), media_type="text/event-stream")
 
 
-async def stream_output(thread, checker):
-    while thread.is_alive():
-        if checker.new_data_available:
-            yield b'data: ' + json.dumps(checker.get_output_obj()).encode() + b'\n\n'
-            checker.new_data_available = False  # Reset flag after streaming
+async def stream_output(queue):
+    while True:
+        if not queue.empty():
+            data = queue.get()  # Retrieve data from the queue
+            #if received data is '[DONE]', then break the loop
+            if data == '[DONE]':
+                # Send the string '[DONE]' to the client, no Json format
+                yield b'data: ' + b'[DONE]' + b'\n\n'
+                break
+            yield b'data: ' + json.dumps(data).encode() + b'\n\n'
         await asyncio.sleep(0.9)
 
 
+from multiprocessing import Process, Queue
+
 class PronunciationCheck:
-    def __init__(self, filename, reference_text, config_json, speech_key, service_region):
+    def __init__(self, filename, reference_text, config_json, speech_key, service_region, queue):
         self.filename = filename
         self.reference_text = reference_text
         self.config_json = config_json
-        self.output_obj = {}
         self.speech_key = speech_key
         self.service_region = service_region
-        self.new_data_available = False  # Flag to indicate new data availability
-
+        self.queue = queue
 
     def on_recognized(self, evt):
-        #pronunciation_result = speechsdk.PronunciationAssessmentResult(evt.result)
-        self.output_obj = json.loads(evt.result.json)
-        self.new_data_available = True  # Set flag to true as new data is available
+        self.queue.put(json.loads(evt.result.json))  # Send data to the queue
+           
 
     def speech_recognize_continuous_from_file(self):
 
@@ -137,6 +146,14 @@ class PronunciationCheck:
             time.sleep(.5)
 
         speech_recognizer.stop_continuous_recognition()
+        # Close the file
+        callback.close()
+        # Delete the file
+        import os
+        os.remove(self.filename)
+        
+        # Close the queue
+        self.queue.put('[DONE]')
 
     def get_output_obj(self):
         return self.output_obj
