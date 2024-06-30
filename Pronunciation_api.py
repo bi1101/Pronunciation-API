@@ -45,7 +45,8 @@ async def pronunciation_check(
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as response:
             if response.status != 200:
-                return {"message": "couldn't get audio from URL"}
+                error_message = await response.text()  # Get the error message from the response
+                return {"status": response.status, "message": error_message}  # Return both status and message
             with open(target_filename, 'wb') as fd:
                 while True:
                     chunk = await response.content.readany()
@@ -62,7 +63,7 @@ async def pronunciation_check(
         "EnableMiscue": enable_miscue,
         "EnableProsodyAssessment": enable_prosody,
         "NBestPhonemeCount": 0,  # > 0 to enable "spoken phoneme" mode, 0 to disable
-        "PhonemeAlphabet": "IPA",
+        "PhonemeAlphabet": phoneme_alphabet,
     }
 
     checker = PronunciationCheck(target_filename, reference_text, config_json, speech_key, service_region)
@@ -138,4 +139,4 @@ class PronunciationCheck:
 
 
 if __name__ == "__main__":
-    uvicorn.run("code:app", host="0.0.0.0", port=8080)
+    uvicorn.run("Pronunciation_api:app", host="0.0.0.0", port=8080)
